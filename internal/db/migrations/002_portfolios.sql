@@ -1,0 +1,6 @@
+CREATE TABLE IF NOT EXISTS portfolios (
+    id SERIAL PRIMARY KEY,
+    user_id TEXT,
+    cash_balance DOUBLE PRECISION NOT NULL DEFAULT 100000,
+    created_at TIMESTAMP DEFAULT NOW()
+);
