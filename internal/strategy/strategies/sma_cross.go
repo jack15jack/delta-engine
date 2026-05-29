@@ -1,4 +1,4 @@
-package strategy
+package strategies
 
 import (
 	"github.com/jack15jack/delta-engine/internal/models"

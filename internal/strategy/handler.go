@@ -1,25 +1,24 @@
-package handlers
+package strategy
 
 import (
 	"net/http"
 
-	"github.com/jack15jack/delta-engine/internal/db/queries"
+	"github.com/jack15jack/delta-engine/internal/db/repos"
 	"github.com/jack15jack/delta-engine/internal/market"
-	"github.com/jack15jack/delta-engine/internal/strategy"
 
 	"github.com/gin-gonic/gin"
 )
 
 type StrategyHandler struct {
 	marketService *market.Service
-	stratEngine   *strategy.Engine
-	signalRepo    *queries.SignalRepo
+	stratEngine   *Engine
+	signalRepo    *repos.SignalRepo
 }
 
 func NewStrategyHandler(
 	ms *market.Service,
-	se *strategy.Engine,
-	repo *queries.SignalRepo,
+	se *Engine,
+	repo *repos.SignalRepo,
 ) *StrategyHandler {
 	return &StrategyHandler{
 		marketService: ms,

@@ -3,11 +3,11 @@ Delta Engine API:
 quantitative trading platform
     ingest live market data
     generate trading signals
-    simulate paper trade execution
+    simulate trade execution
     track PnL, exposure, and risk
     evaluate strategy performance
     backtest strategies on historical data
-    optionally execute real trades later
+    
 
 
 Frontend/UI
@@ -15,7 +15,7 @@ Frontend/UI
     -> Go API Layer
         -> Market Data Engine
         -> Strategy Engine
-        -> Paper Trading Engine
+        -> Trading Engine
         -> Risk & Analytics Engine
     -> PostgreSQL DB
 
@@ -81,62 +81,34 @@ Later Development System Features:
     Swagger/OpenAPI docs
 
 
+How it will work:
+    Market data comes in through GET market/quote/:ticker or a database of historical market data
+    Strategy engine reads the market data
+    Indicators update
+    BUY/SELL/HOLD signal created
+    Signal stored in DB
+    Trading Engine executes BUY/SELL
+    Risk Engine updates metrics
+    Over the course of a backtest, PnL will be recorded to view profitability of the system    
+
 DB Schema:
+    quotes
+    candles
+    strategies
+    signals
+    trades
+    positions
+    performance_metrics
+    users
 
-users:
-    id
-    email
-    password_hash
-    created_at
 
-portfolios:
-    id
-    user_id
-    cash_balance
-    created_at
-
-positions:
-    id
-    portfolio_id
-    ticker
-    quantity
-    avg_cost
-    unrealized_pnl
-    updated_at
-
-paper_trades:
-    id
-    portfolio_id
-    ticker
-    side
-    quantity
-    price
-    fees
-    executed_at
-
-market_data:
-    id
-    ticker
-    timestamp
-    open
-    high
-    low
-    close
-    volume
-
-signals:
-    id
-    strategy_name
-    ticker
-    signal_type
-    confidence
-    timestamp
-
-strategy_results:
-    id
-    strategy_name
-    sharpe_ratio
-    max_drawdown
-    win_rate
-    total_return
-    created_at
+For me:
+    routes are what URL calls what code
+    middleware is filters and utils for logging/auth
+    handlers are HTTP request translators
+    market/ is for market functionality
+    strategy/ is for strategy functionality
+    analytics/ is for risk, volatility, and winrate calculations
+    models/ is for shared data structures
+    db/ is for database interaction
+    

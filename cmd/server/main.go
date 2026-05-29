@@ -5,9 +5,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/jack15jack/delta-engine/internal/api/middleware"
-	"github.com/jack15jack/delta-engine/internal/api/routes"
+	"github.com/jack15jack/delta-engine/internal/api"
 	"github.com/jack15jack/delta-engine/internal/config"
+	"github.com/jack15jack/delta-engine/internal/db"
+	"github.com/jack15jack/delta-engine/internal/middleware"
 )
 
 func main() {
@@ -19,9 +20,13 @@ func main() {
 	// Core middleware
 	router.Use(middleware.Recovery())
 	router.Use(middleware.Logger())
+	router.Use(middleware.Auth())
+
+	dbConn := db.NewSQLite()
+	db.AutoMigrate(dbConn)
 
 	// Register all route groups
-	routes.RegisterRoutes(router)
+	api.RegisterRoutes(router, dbConn)
 
 	log.Printf("Delta Engine API running on :%s", cfg.Port)
 

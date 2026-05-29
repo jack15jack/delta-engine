@@ -1,54 +1,41 @@
 package portfolio
 
 import (
-	"database/sql"
+	"fmt"
 	"time"
 
 	"github.com/jack15jack/delta-engine/internal/models"
+	"gorm.io/gorm"
 )
 
 type Service struct {
-	db *sql.DB
+	db *gorm.DB
 }
 
-func NewService(db *sql.DB) *Service {
+func NewService(db *gorm.DB) *Service {
 	return &Service{db: db}
 }
 
 func (s *Service) CreatePortfolio(userID string) (*models.Portfolio, error) {
 
-	var id int
+	p := models.Portfolio{
+		UserID:      userID,
+		CashBalance: 100000,
+	}
 
-	err := s.db.QueryRow(
-		`INSERT INTO portfolios (user_id, cash_balance)
-		 VALUES ($1, $2)
-		 RETURNING id`,
-		userID,
-		100000,
-	).Scan(&id)
-
+	err := s.db.Create(&p).Error
 	if err != nil {
 		return nil, err
 	}
 
-	return &models.Portfolio{
-		ID:          id,
-		UserID:      userID,
-		CashBalance: 100000,
-	}, nil
+	return &p, nil
 }
 
 func (s *Service) GetPortfolio(id int) (*models.Portfolio, error) {
 
-	p := models.Portfolio{}
+	var p models.Portfolio
 
-	err := s.db.QueryRow(
-		`SELECT id, user_id, cash_balance
-		 FROM portfolios
-		 WHERE id = $1`,
-		id,
-	).Scan(&p.ID, &p.UserID, &p.CashBalance)
-
+	err := s.db.First(&p, id).Error
 	if err != nil {
 		return nil, err
 	}
@@ -58,93 +45,140 @@ func (s *Service) GetPortfolio(id int) (*models.Portfolio, error) {
 
 func (s *Service) GetPositions(portfolioID int) ([]models.Position, error) {
 
-	rows, err := s.db.Query(
-		`SELECT id, portfolio_id, ticker, quantity, avg_cost
-		 FROM positions
-		 WHERE portfolio_id = $1`,
-		portfolioID,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
 	var positions []models.Position
 
-	for rows.Next() {
-		var p models.Position
-
-		err := rows.Scan(
-			&p.ID,
-			&p.PortfolioID,
-			&p.Ticker,
-			&p.Quantity,
-			&p.AvgCost,
-		)
-
-		if err != nil {
-			return nil, err
-		}
-
-		positions = append(positions, p)
+	err := s.db.Where("portfolio_id = ?", portfolioID).Find(&positions).Error
+	if err != nil {
+		return nil, err
 	}
 
 	return positions, nil
 }
 
+func (s *Service) GetTrades(portfolioID int) ([]models.Trade, error) {
+
+	var trades []models.Trade
+
+	err := s.db.Where("portfolio_id = ?", portfolioID).Order("executed_at DESC").Find(&trades).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return trades, nil
+}
+
 func (s *Service) ExecuteTrade(portfolioID int, ticker, side string, qty, price float64) error {
-	tx, err := s.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
 
-	_, err = tx.Exec(
-		`INSERT INTO trades (portfolio_id, ticker, side, quantity, price, executed_at)
-		 VALUES ($1,$2,$3,$4,$5,$6)`,
-		portfolioID,
-		ticker,
-		side,
-		qty,
-		price,
-		time.Now(),
-	)
-	if err != nil {
-		return err
-	}
+	return s.db.Transaction(func(tx *gorm.DB) error {
 
-	// position update
-	if side == "BUY" {
-
-		_, err = tx.Exec(`
-			INSERT INTO positions (portfolio_id, ticker, quantity, avg_cost)
-			VALUES ($1,$2,$3,$4)
-			ON CONFLICT (portfolio_id, ticker)
-			DO UPDATE SET
-				quantity = positions.quantity + EXCLUDED.quantity,
-				avg_cost = (
-					(positions.avg_cost * positions.quantity + EXCLUDED.avg_cost * EXCLUDED.quantity)
-					/ (positions.quantity + EXCLUDED.quantity)
-				)
-		`, portfolioID, ticker, qty, price)
-
-		if err != nil {
+		// 1. Load portfolio (needed for cash updates)
+		var portfolio models.Portfolio
+		if err := tx.First(&portfolio, portfolioID).Error; err != nil {
 			return err
 		}
-	}
 
-	if side == "SELL" {
+		// 2. Insert trade
+		trade := models.Trade{
+			PortfolioID: portfolioID,
+			Ticker:      ticker,
+			Side:        side,
+			Quantity:    qty,
+			Price:       price,
+			ExecutedAt:  time.Now(),
+		}
 
-		_, err = tx.Exec(`
-			UPDATE positions
-			SET quantity = quantity - $3
-			WHERE portfolio_id = $1 AND ticker = $2
-		`, portfolioID, ticker, qty)
-
-		if err != nil {
+		if err := tx.Create(&trade).Error; err != nil {
 			return err
 		}
-	}
 
-	return tx.Commit()
+		// 3. Calculate trade value
+		tradeValue := qty * price
+
+		// BUY LOGIC
+		if side == "BUY" {
+
+			// risk check (basic)
+			if portfolio.CashBalance < tradeValue {
+				return fmt.Errorf("insufficient cash")
+			}
+
+			// update cash
+			portfolio.CashBalance -= tradeValue
+
+			// update position
+			var pos models.Position
+			err := tx.Where("portfolio_id = ? AND ticker = ?", portfolioID, ticker).
+				First(&pos).Error
+
+			if err != nil {
+				if err == gorm.ErrRecordNotFound {
+					pos = models.Position{
+						PortfolioID: portfolioID,
+						Ticker:      ticker,
+						Quantity:    qty,
+						AvgCost:     price,
+					}
+
+					if err := tx.Create(&pos).Error; err != nil {
+						return err
+					}
+				} else {
+					return err
+				}
+			} else {
+				totalQty := pos.Quantity + qty
+
+				pos.AvgCost =
+					(pos.AvgCost*pos.Quantity + price*qty) / totalQty
+
+				pos.Quantity = totalQty
+
+				if err := tx.Save(&pos).Error; err != nil {
+					return err
+				}
+			}
+		}
+
+		// SELL LOGIC
+		if side == "SELL" {
+
+			// update cash
+			portfolio.CashBalance += tradeValue
+
+			// update position
+			var pos models.Position
+			err := tx.Where("portfolio_id = ? AND ticker = ?", portfolioID, ticker).
+				First(&pos).Error
+
+			if err != nil {
+				return err
+			}
+
+			// prevent invalid sells
+			if pos.Quantity < qty {
+				return fmt.Errorf("insufficient position size")
+			}
+
+			pos.Quantity -= qty
+
+			// optional: clear position if zero
+			if pos.Quantity == 0 {
+				if err := tx.Delete(&pos).Error; err != nil {
+					return err
+				}
+			} else {
+				if err := tx.Save(&pos).Error; err != nil {
+					return err
+				}
+			}
+		}
+
+		// 4. Persist portfolio update
+		if err := tx.Save(&portfolio).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
 }

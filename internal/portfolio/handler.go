@@ -1,46 +1,54 @@
-package handlers
+package portfolio
 
 import (
 	"net/http"
 	"strconv"
 
-	"github.com/jack15jack/delta-engine/internal/portfolio"
-
 	"github.com/gin-gonic/gin"
 )
 
 type PortfolioHandler struct {
-	service *portfolio.Service
+	service *Service
 }
 
-func NewPortfolioHandler(s *portfolio.Service) *PortfolioHandler {
+func NewPortfolioHandler(s *Service) *PortfolioHandler {
 	return &PortfolioHandler{service: s}
 }
 
 func (h *PortfolioHandler) CreatePortfolio(c *gin.Context) {
 
-	userID := c.Query("user_id")
-
-	p, err := h.service.CreatePortfolio(userID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(401, gin.H{"error": "unauthorized"})
 		return
 	}
 
-	c.JSON(http.StatusOK, p)
+	p, err := h.service.CreatePortfolio(userID.(string))
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(200, p)
 }
 
 func (h *PortfolioHandler) GetPortfolio(c *gin.Context) {
 
-	id, _ := strconv.Atoi(c.Param("id"))
+	idStr := c.Param("id")
 
-	p, err := h.service.GetPortfolio(id)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	id, err := strconv.Atoi(idStr)
+	if err != nil || id <= 0 {
+		c.JSON(400, gin.H{"error": "invalid portfolio id"})
 		return
 	}
 
-	c.JSON(http.StatusOK, p)
+	p, err := h.service.GetPortfolio(id)
+	if err != nil {
+		c.JSON(404, gin.H{"error": "portfolio not found"})
+		return
+	}
+
+	c.JSON(200, p)
 }
 
 func (h *PortfolioHandler) Positions(c *gin.Context) {

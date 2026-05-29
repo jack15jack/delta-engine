@@ -1,18 +1,16 @@
-package handlers
+package market
 
 import (
 	"net/http"
-
-	"github.com/jack15jack/delta-engine/internal/market"
 
 	"github.com/gin-gonic/gin"
 )
 
 type MarketHandler struct {
-	service *market.Service
+	service *Service
 }
 
-func NewMarketHandler(service *market.Service) *MarketHandler {
+func NewMarketHandler(service *Service) *MarketHandler {
 	return &MarketHandler{service: service}
 }
 
