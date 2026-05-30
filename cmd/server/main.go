@@ -5,10 +5,14 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/jack15jack/delta-engine/internal/api"
+	"github.com/jack15jack/delta-engine/internal/analytics"
+	"github.com/jack15jack/delta-engine/internal/backtest"
 	"github.com/jack15jack/delta-engine/internal/config"
 	"github.com/jack15jack/delta-engine/internal/db"
+	"github.com/jack15jack/delta-engine/internal/market"
 	"github.com/jack15jack/delta-engine/internal/middleware"
+	"github.com/jack15jack/delta-engine/internal/portfolio"
+	"github.com/jack15jack/delta-engine/internal/strategy"
 )
 
 func main() {
@@ -22,11 +26,23 @@ func main() {
 	router.Use(middleware.Logger())
 	router.Use(middleware.Auth())
 
+	// Register all route groups
+	api := router.Group("/api")
+
 	dbConn := db.NewSQLite()
 	db.AutoMigrate(dbConn)
 
-	// Register all route groups
-	api.RegisterRoutes(router, dbConn)
+	provider := market.NewFinnhubProvider()
+	marketService := market.NewService(provider)
+
+	backtestService := backtest.NewService(marketService)
+	backtestHandler := backtest.NewHandler(backtestService)
+
+	market.RegisterMarketRoutes(api, dbConn, marketService)
+	strategy.RegisterStrategyRoutes(api, dbConn)
+	portfolio.RegisterPortfolioRoutes(api, dbConn)
+	analytics.RegisterAnalyticsRoutes(api, dbConn, marketService)
+	backtest.RegisterBacktestRoutes(api, backtestHandler)
 
 	log.Printf("Delta Engine API running on :%s", cfg.Port)
 

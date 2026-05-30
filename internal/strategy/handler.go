@@ -37,7 +37,7 @@ func (h *StrategyHandler) Run(c *gin.Context) {
 		return
 	}
 
-	history := h.marketService.GetHistory(symbol)
+	history := h.marketService.GetCachedHistory(symbol)
 
 	signals := h.stratEngine.Run(*candle, history)
 

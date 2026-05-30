@@ -56,12 +56,16 @@ func (f *FinnhubProvider) GetQuote(symbol string) (*models.Candle, error) {
 	}, nil
 }
 
-func (f *FinnhubProvider) GetHistory(symbol string, limit int) ([]models.Candle, error) {
+func (f *FinnhubProvider) GetHistoricalData(symbol string, start time.Time, end time.Time) ([]models.Candle, error) {
+
+	from := start.Unix()
+	to := end.Unix()
 
 	url := fmt.Sprintf(
-		"https://finnhub.io/api/v1/stock/candle?symbol=%s&resolution=1&count=%d&token=%s",
+		"https://finnhub.io/api/v1/stock/candle?symbol=%s&resolution=D&from=%d&to=%d&token=%s",
 		symbol,
-		limit,
+		from,
+		to,
 		f.apiKey,
 	)
 
@@ -70,32 +74,40 @@ func (f *FinnhubProvider) GetHistory(symbol string, limit int) ([]models.Candle,
 		return nil, err
 	}
 
-	var raw struct {
-		T []int64   `json:"t"` // time
-		O []float64 `json:"o"` // open
-		H []float64 `json:"h"` // high
-		L []float64 `json:"l"` // low
-		C []float64 `json:"c"` // close
-		V []float64 `json:"v"` // volume
+	fmt.Println("FINNHUB RAW RESPONSE:", string(resp.Body()))
+
+	if len(resp.Body()) == 0 {
+		return nil, fmt.Errorf("empty response from finnhub")
 	}
 
-	err = json.Unmarshal(resp.Body(), &raw)
-	if err != nil {
+	var raw struct {
+		S string    `json:"s"`
+		T []int64   `json:"t"`
+		O []float64 `json:"o"`
+		H []float64 `json:"h"`
+		L []float64 `json:"l"`
+		C []float64 `json:"c"`
+		V []float64 `json:"v"`
+	}
+
+	if err := json.Unmarshal(resp.Body(), &raw); err != nil {
 		return nil, err
 	}
 
-	var candles []models.Candle
+	if raw.S != "ok" {
+		return nil, fmt.Errorf("finnhub error status: %s", raw.S)
+	}
+
+	candles := make([]models.Candle, 0, len(raw.T))
 
 	for i := range raw.T {
 		candles = append(candles, models.Candle{
 			Ticker: symbol,
 			Time:   time.Unix(raw.T[i], 0),
-
-			Open:  raw.O[i],
-			High:  raw.H[i],
-			Low:   raw.L[i],
-			Close: raw.C[i],
-
+			Open:   raw.O[i],
+			High:   raw.H[i],
+			Low:    raw.L[i],
+			Close:  raw.C[i],
 			Volume: raw.V[i],
 		})
 	}

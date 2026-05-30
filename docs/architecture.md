@@ -44,19 +44,23 @@
         routes.go (RegisterPortfolioRoutes)
         handler.go (NewPortfolioHandler, CreatePortfolio, GetPortfolio, Postitions, Trade)
     /analytics
-        routes.go (RegisterAnalyticsRoutes, no URLS to call yet)
-        handler.go (empty)
-        service.go (empty)
+        routes.go (RegisterAnalyticsRoutes)
+        handler.go (NewHandler, GetPortfolioPerformance)
+        service.go (BuildSnapshot, GetPortfolioPerformance, GetExposure, GetRiskMetrics, GetTradeMetrics, GetPositionMetrics)
+        analytics_models.go (PortfolioPerformance, ExposureMetrics, EquitySnapshot, PortfolioSnapshot, RiskMetrics, TradeMetrics, PositionMetrics)
+    /backtest
+        engine.go (NewEngine, Run, Results)
+        replay.go (NewReplay, Next)
+        simulator.go (NewSimulator, Buy, Sell, Snapshot)
+        backtest_models.go (EquitySnapshot, SimulatedPosition, Results)
     /db
         /data
             delta.db
         /repos
             signals.go (NewSignalRepo, Insert)
-        sqlite.go (NewPostgres)
-    /backtest
-        engine.go (empty)
-        replay.go (empty)
-        simulator.go (empty)
+        migrate.go (AutoMigrate)
+        sqlite.go (NewSQLite)
+    
 
 /scripts
 /tests

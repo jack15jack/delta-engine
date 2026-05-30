@@ -10,10 +10,7 @@ func NewEngine(strategies ...Strategy) *Engine {
 	return &Engine{strategies: strategies}
 }
 
-func (e *Engine) Run(
-	candle models.Candle,
-	history []models.Candle,
-) []*models.Signal {
+func (e *Engine) Run(candle models.Candle, history []models.Candle) []*models.Signal {
 
 	var signals []*models.Signal
 
